@@ -2,6 +2,7 @@ from django.db import models
 from django.db.models import UniqueConstraint # P/ valores únicos
 from django.db.models.functions import Lower # Ret. letras minúsculas de um campo
 from django.urls import reverse # get_absolute_url() recolhe URL de um ID
+import datetime
 import uuid # Necessário para instância de livros
 
 class Genre(models.Model):
@@ -35,10 +36,10 @@ class Book(models.Model):
     """Entidade livro, não uma cópia/instância."""
     title = models.CharField(max_length = 200)
     
-    # Um livro pode ter mais de um autor, mas esse tutorial assume apenas um
+    # Um livro pode ter mais de um autor, mas esse tutorial assume apenas um.
     # Author é declarado como String ao invés de objeto pois esse não foi
     #  declarado ainda no arquivo.  RESTRICT impede o autor de ser removido
-    #  da base case tenha algum livro no seu nome
+    #  da base caso tenha algum livro no seu nome
     author = models.ForeignKey('Author', on_delete=models.RESTRICT, null=True)
     
     summary = models.TextField(
@@ -61,14 +62,22 @@ class Book(models.Model):
     def get_absolute_url(self):
         """Retorna a URL para acessar os detalhes desse livro."""
         return reverse('book-detail', args=[str(self.id)])
+
+    def display_genre(self):
+        """Retorna texto mostrando os três primeiros gêneros para o painel Adm.
+           Necessário para campos tipo muitos para muitos na base de dados"""
+        return ', '.join(genre.name for genre in self.genre.all()[:3])
+
+    # Nome da coluna no painel Adm dessa classe
+    display_genre.short_description = 'Genre'
     
 class BookInstance(models.Model):
-    """Manigestação física do livro, que pode ser emprestada."""
+    """Manifestação física de um livro"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4,
                           help_text="Identificador único para esse " \
                           "livro em toda biblioteca.")
     book = models.ForeignKey('Book', on_delete=models.RESTRICT, null=True)
-    imprint = models.CharField(max_length=200)
+    imprint = models.CharField(max_length=200, help_text='Editora')
     due_back = models.DateField(null=True, blank=True)
 
     # Situação do empréstimo
@@ -87,12 +96,43 @@ class BookInstance(models.Model):
         help_text='Disponibilidade do livro.',
     )
 
+    def display_expected_return(self):
+        """Dias que faltam para o retorno ou se já expirou"""
+        today = datetime.date.today()
+
+        # Ainda no prazo
+        if self.status == 'e' and self.due_back >= today:
+            time_left = self.due_back - today
+            day_msg = ''
+            match time_left:
+                case 0:
+                    day_msg = 'para hoje'
+                case 1:
+                    day_msg = 'para amanhã'
+                case _:
+                    day_msg = f'em {time_left.days} dias'
+
+            msg = f'Retorno esperado {day_msg}'
+            return msg
+
+        # Atrasado
+        elif self.status == 'e' and self.due_back < today:
+            overtime = today - self.due_back
+            day_msg = 'desde ontem' if overtime.days == 1 else f'em {overtime.days} dias'
+            msg = f'Entrega atrasada {day_msg}'
+            return msg
+
+        return '-'
+
     class Meta:
         ordering = ['due_back']
 
     def __str__(self):
-        """Texto representando o objeto Model"""
+        """Texto que representa a instância"""
         return f'{self.id} ({self.book.title})'
+
+    display_expected_return.short_description = 'Devolução'
+            
 
 class Author(models.Model):
     """Modelo que representa o autor"""
@@ -122,7 +162,7 @@ class Language(models.Model):
         """Retorna a URL com os detalhes do idioma"""
         return reverse('language-detail', args=[str(self.id)])
 
-    def __str__():
+    def __str__(self):
         """Texto representado o objeto Model"""
         return self.name
 
