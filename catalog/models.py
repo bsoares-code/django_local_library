@@ -2,7 +2,9 @@ from django.db import models
 from django.db.models import UniqueConstraint # P/ valores únicos
 from django.db.models.functions import Lower # Ret. letras minúsculas de um campo
 from django.urls import reverse # get_absolute_url() recolhe URL de um ID
-import datetime
+from django.conf import settings
+from django.contrib.auth.models import User
+from datetime import date
 import uuid # Necessário para instância de livros
 
 class Genre(models.Model):
@@ -96,42 +98,54 @@ class BookInstance(models.Model):
         help_text='Disponibilidade do livro.',
     )
 
-    def display_expected_return(self):
-        """Dias que faltam para o retorno ou se já expirou"""
-        today = datetime.date.today()
+    borrower = models.ForeignKey(User,
+                                 on_delete=models.SET_NULL,
+                                 null=True, blank=True)
 
-        # Ainda no prazo
-        if self.status == 'e' and self.due_back >= today:
-            time_left = self.due_back - today
-            day_msg = ''
-            match time_left:
-                case 0:
-                    day_msg = 'para hoje'
-                case 1:
-                    day_msg = 'para amanhã'
-                case _:
-                    day_msg = f'em {time_left.days} dias'
+    @property
+    def is_overdue(self):
+        """Determina se um livro esta atrasado com base no dia atual."""
+        # Necessário validar se a data de retorno existe
+        return bool(self.due_back and date.today() > self.due_back)
 
-            msg = f'Retorno esperado {day_msg}'
-            return msg
+    # Funcionalidade substituida por is_overdue, deixado aqui para referencia
+    # def display_expected_return(self):
+    #     """Dias que faltam para o retorno ou se já expirou"""
+    #     today = date.today()
 
-        # Atrasado
-        elif self.status == 'e' and self.due_back < today:
-            overtime = today - self.due_back
-            day_msg = 'desde ontem' if overtime.days == 1 else f'em {overtime.days} dias'
-            msg = f'Entrega atrasada {day_msg}'
-            return msg
+    #     # Ainda no prazo
+    #     if self.status == 'e' and self.due_back >= today:
+    #         time_left = self.due_back - today
+    #         day_msg = ''
+    #         match time_left:
+    #             case 0:
+    #                 day_msg = 'para hoje'
+    #             case 1:
+    #                 day_msg = 'para amanhã'
+    #             case _:
+    #                 day_msg = f'em {time_left.days} dias'
 
-        return '-'
+    #         msg = f'Retorno esperado {day_msg}'
+    #         return msg
+
+    #     # Atrasado
+    #     elif self.status == 'e' and self.due_back < today:
+    #         overtime = today - self.due_back
+    #         day_msg = 'desde ontem' if overtime.days == 1 else f'em {overtime.days} dias'
+    #         msg = f'Entrega atrasada {day_msg}'
+    #         return msg
+
+    #     return '-'
 
     class Meta:
         ordering = ['due_back']
+        permissions = (("can_mark_returned", "Marcar livro como devolvido"),)
 
     def __str__(self):
         """Texto que representa a instância"""
         return f'{self.id} ({self.book.title})'
 
-    display_expected_return.short_description = 'Devolução'
+    #display_expected_return.short_description = 'Devolução'
             
 
 class Author(models.Model):
