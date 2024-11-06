@@ -32,6 +32,9 @@
 	  {% if user.is_authenticated %}
 	  <li>User: {{ user.get_username }}</li>
 	  <li><a href="{% url 'my-borrowed' %}">Meus empréstimos</a></li>
+	  {% if perms.catalog.can_mark_returned %}
+	  <li><a href="{% url 'borrowed-books' %}">Todos empréstimos</a></li>
+	  {% endif %}
 	  <li>
 	    <form id="logout-form" method="post" action="{% url 'admin:logout' %}">
               {% csrf_token %}
