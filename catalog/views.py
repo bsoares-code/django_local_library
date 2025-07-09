@@ -2,8 +2,9 @@ import datetime
 
 from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponseRedirect
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.views import generic
+from django.views.generic.edit import CreateView, UpdateView, DeleteView
 from django.core.paginator import Paginator
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import permission_required
@@ -49,7 +50,7 @@ class BookListView(generic.ListView):
     #template_name = 'books/my_arbitrary_temple_name_list.html' # Especifique seu próprio caminho p/ o modelo
 
     # Também é possível sobrescrever get_context_data para passar variáveis de contexto adicionais
-    #  para o modelo.  Exemplo a seguir mostra como adicionar a variável some_data p/ o
+    #  para o template.  Exemplo a seguir mostra como adicionar a variável some_data p/ o
     #  contexto
     # def get_context_data(self, **kwargs):
     #     # Chama a implementação base para recolher o contexto
@@ -136,7 +137,7 @@ def renew_book_librarian(request, pk):
             book_instance.save()
 
             # Redirecione para uma nova URL
-            return HttpResponseRedirect(reverse('all-borrowed'))
+            return HttpResponseRedirect(reverse('borrowed-books'))
 
     # Caso seja GET (ou outros), produza um formulário padrão
     else:
@@ -149,3 +150,37 @@ def renew_book_librarian(request, pk):
     }
 
     return render(request, 'catalog/book_renew_librarian.html', context)
+
+
+class AuthorCreate(PermissionRequiredMixin, CreateView):
+    model = Author
+    fields = ['first_name', 'last_name', 'date_of_birth', 'date_of_death']
+    #initial = {'date_of_death': '11/11/2023'}
+    permission_required = 'catalog.add_author'
+
+
+class AuthorUpdate(PermissionRequiredMixin, UpdateView):
+    model = Author
+    # Não recomendado, risco de segurança em potencial
+    fields = '__all__'
+    permission_required = 'catalog.change_author'
+
+class AuthorDelete(PermissionRequiredMixin, DeleteView):
+    model = Author
+    success_url = reverse_lazy('authors')
+    permission_required = 'catalog.delete_author'
+
+    def form_valid(self, form):
+        try:
+            self.object.delete()
+            return HttpResponseRedirect(self.success_url)
+        except Exception as e:
+            return HttpResponseRedirect(
+                reverse("author-delete", kwargs={"pk": self.object.pk})
+            )
+
+
+class BookCreate(PermissionRequiredMixin, CreateView):
+    model = Book
+    fields = ["author", "summary", "isbn", "genre", "language"]
+    permission_required = 'catalog.add_book'
